@@ -50,4 +50,46 @@ exports.logout = (req, res) => {
         res.json({ message: "Çıkış yapıldı" });
     });
 };
+// register kullanıcı kaydı ve e-posta doğrulama kodu gönderme
+exports.register = async (req, res) => {
+    const { username, email, password } = req.body;
+
+    // kontrol: kullanıcı mevcut mu
+    const [existing] = await pool.query("SELECT * FROM users WHERE email = ?", [email]);
+    if (existing.length > 0) {
+        return res.status(400).json({ message: "Bu e-posta zaten kayıtlı" });
+    }
+
+    // rastgele 6 haneli doğrulama kodu
+    const code = Math.floor(100000 + Math.random() * 900000);
+
+    // e-posta gönder (emailSender.js)
+    await sendEmail({
+        to: email,
+        subject: "Doğrulama Kodu",
+        text: `Doğrulama kodunuz: ${code}`
+    });
+
+    // doğrulama kodunu geçici olarak memory'de saklayalım
+    verificationCodes[email] = code;
+
+    res.json({ message: "Doğrulama kodu e-posta ile gönderildi" });
+};
+
+// verify kodu kontrol edip kullanıcıyı kaydetme
+exports.verify = async (req, res) => {
+    const { email, code, username, password } = req.body;
+
+    if (verificationCodes[email] != code) {
+        return res.status(400).json({ message: "Kod yanlış" });
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    await pool.query("INSERT INTO users (username, email, password) VALUES (?, ?, ?)", [username, email, hashed]);
+
+    delete verificationCodes[email]; // kodu sil
+
+    res.json({ message: "Kayıt başarılı, giriş yapabilirsiniz" });
+};
+
 

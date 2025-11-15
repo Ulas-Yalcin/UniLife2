@@ -30,4 +30,6 @@ router.post('/logout', authMiddleware, logout);
 
 // export
 module.exports = router;
+router.post('/register', register);
+router.post('/verify', verify);
 

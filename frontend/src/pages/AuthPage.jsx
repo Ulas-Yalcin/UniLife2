@@ -15,6 +15,9 @@ const AuthPage = () => {
   const [errors, setErrors] = useState({});
   const [loading, setLoading] = useState(false);
 
+  const [showVerificationInput, setShowVerificationInput] = useState(false);
+  const [verificationCode, setVerificationCode] = useState('');
+
   const interestOptions = [
     'Spor','Müzik','Sanat','Teknoloji','Edebiyat','Sinema','Tiyatro',
     'Fotoğrafçılık','Yemek','Seyahat','Doğa','Gönüllülük','Bilim','Tarih','Felsefe'
@@ -65,22 +68,64 @@ const AuthPage = () => {
     setLoading(true);
     try {
       if (isLogin) {
-        // Login API çağrısı
-        const response = await fetch('http://localhost:5000/api/auth/login', {
+        // Login
+        const res = await fetch('http://localhost:5000/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: formData.email, password: formData.password }),
-          credentials: 'include' // session için
+          credentials: 'include',
+          body: JSON.stringify({ username: formData.email, password: formData.password })
         });
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.message || 'Giriş yapılamadı');
-        alert('Giriş başarılı: ' + data.user.username);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Giriş yapılamadı');
+        alert(`Giriş başarılı! Hoş geldin ${data.user.username}`);
       } else {
-        // Register API (daha sonra backend eklenebilir)
-        console.log('Kayıt olunuyor:', formData);
+        // Register: kod gönder
+        const res = await fetch('http://localhost:5000/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            username: formData.name,
+            email: formData.email,
+            password: formData.password
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || 'Kayıt başarısız');
+        setShowVerificationInput(true);
+        alert('Doğrulama kodu e-posta ile gönderildi.');
       }
     } catch (err) {
       setErrors({ submit: err.message });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (!verificationCode) {
+      setErrors({ verificationCode: 'Doğrulama kodu gereklidir' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const res = await fetch('http://localhost:5000/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: formData.name,
+          email: formData.email,
+          password: formData.password,
+          code: verificationCode
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message);
+      alert('Doğrulama başarılı! Artık giriş yapabilirsiniz.');
+      setShowVerificationInput(false);
+      switchMode();
+    } catch (err) {
+      setErrors({ verificationCode: err.message });
     } finally {
       setLoading(false);
     }
@@ -90,6 +135,8 @@ const AuthPage = () => {
     setIsLogin(!isLogin);
     setFormData({ email:'', password:'', name:'', confirmPassword:'', gender:'', birthDate:'', interests:[] });
     setErrors({});
+    setShowVerificationInput(false);
+    setVerificationCode('');
   };
 
   return (
@@ -105,7 +152,7 @@ const AuthPage = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="auth-form">
-              {!isLogin && (
+              {!isLogin && !showVerificationInput && (
                 <>
                   <div className="form-group">
                     <label htmlFor="name">Ad Soyad <span className="required">*</span></label>
@@ -153,6 +200,15 @@ const AuthPage = () => {
                 </>
               )}
 
+              {showVerificationInput && (
+                <div className="form-group">
+                  <label>Doğrulama Kodu</label>
+                  <input type="text" value={verificationCode} onChange={(e)=>setVerificationCode(e.target.value)} placeholder="E-postanıza gönderilen kodu girin"/>
+                  {errors.verificationCode && <span className="error-message">{errors.verificationCode}</span>}
+                  <button type="button" className="auth-button" onClick={handleVerifyCode} disabled={loading}>{loading ? 'Kontrol ediliyor...' : 'Doğrula'}</button>
+                </div>
+              )}
+
               <div className="form-group">
                 <label htmlFor="email">Üniversite E-posta <span className="required">*</span></label>
                 <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} className={errors.email ? 'error' : ''}/>
@@ -167,9 +223,11 @@ const AuthPage = () => {
 
               {errors.submit && <div className="error-message submit-error">{errors.submit}</div>}
 
-              <button type="submit" className="auth-button" disabled={loading}>
-                {loading ? 'İşleniyor...' : (isLogin ? 'Giriş Yap' : 'Kayıt Ol')}
-              </button>
+              {!showVerificationInput && (
+                <button type="submit" className="auth-button" disabled={loading}>
+                  {loading ? 'İşleniyor...' : (isLogin ? 'Giriş Yap' : 'Kayıt Ol')}
+                </button>
+              )}
             </form>
 
             <div className="auth-footer">
